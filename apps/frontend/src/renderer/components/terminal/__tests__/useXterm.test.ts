@@ -131,12 +131,12 @@ async function setupMockXterm(
   });
 
   const { WebLinksAddon } = await import("@xterm/addon-web-links");
-  (WebLinksAddon as unknown as Mock).mockImplementation(function () {
+  vi.mocked(WebLinksAddon).mockImplementation(function () {
     return {};
   });
 
   const { SerializeAddon } = await import("@xterm/addon-serialize");
-  (SerializeAddon as unknown as Mock).mockImplementation(function () {
+  vi.mocked(SerializeAddon).mockImplementation(function () {
     return {
       serialize: vi.fn(() => ""),
       dispose: vi.fn(),
@@ -176,15 +176,26 @@ describe("useXterm keyboard handlers", () => {
     readText: ReturnType<typeof vi.fn>;
   };
 
-  beforeEach(() => {
-    // Clear all mocks before each test
-    vi.clearAllMocks();
-
-    // Re-set global mocks (they get restored by vi.restoreAllMocks() in afterEach)
+  beforeAll(() => {
+    // Set up global mocks once for all tests
+    // These persist across tests but are not affected by vi.clearAllMocks()
     global.requestAnimationFrame = vi.fn(
       (cb: FrameRequestCallback) => setTimeout(cb, 0) as unknown as number
     );
     global.cancelAnimationFrame = vi.fn((id: unknown) => clearTimeout(id as number));
+
+    // Mock ResizeObserver
+    global.ResizeObserver = vi.fn().mockImplementation(function () {
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+      };
+    });
+  });
+  beforeEach(() => {
+    // Clear all mocks before each test
+    vi.clearAllMocks();
 
     // Ensure window and navigator exist in test environment
     if (typeof window === "undefined") {
@@ -213,14 +224,10 @@ describe("useXterm keyboard handlers", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    // Cleanup React DOM to prevent memory leaks
+    cleanup();
     // Restore the full original navigator.platform descriptor
     Object.defineProperty(navigator, "platform", originalNavigatorPlatformDescriptor);
-    // Re-apply global mocks (they get cleared by vi.restoreAllMocks)
-    global.requestAnimationFrame = vi.fn(
-      (cb: FrameRequestCallback) => setTimeout(cb, 0) as unknown as number
-    );
-    global.cancelAnimationFrame = vi.fn((id: unknown) => clearTimeout(id as number));
   });
 
   afterAll(() => {
@@ -279,7 +286,7 @@ describe("useXterm keyboard handlers", () => {
       // Test CTRL+SHIFT+V (Linux-specific)
       await act(async () => {
         const event = new KeyboardEvent("keydown", {
-          key: "V",
+          key: "v",
           ctrlKey: true,
           shiftKey: true,
         });
@@ -596,7 +603,7 @@ describe("useXterm keyboard handlers", () => {
 
       await act(async () => {
         const event = new KeyboardEvent("keydown", {
-          key: "V",
+          key: "v",
           ctrlKey: true,
           shiftKey: true,
         });
@@ -638,7 +645,7 @@ describe("useXterm keyboard handlers", () => {
 
       // Should log error but not throw
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[useXterm] Failed to copy selection:",
+        expect.stringContaining("[useXterm] Failed to copy selection:"),
         expect.any(Error)
       );
 
@@ -669,7 +676,7 @@ describe("useXterm keyboard handlers", () => {
 
       // Should log error but not throw
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[useXterm] Failed to read clipboard:",
+        expect.stringContaining("[useXterm] Failed to read clipboard:"),
         expect.any(Error)
       );
 

@@ -618,6 +618,25 @@ export function invokeClaude(
         debugLog(
           "[ClaudeIntegration:invokeClaude] ========== INVOKE CLAUDE COMPLETE (temp file) =========="
         );
+        // Schedule deferred cleanup of temp file (non-blocking fallback)
+        // The shell command already includes in-shell cleanup (rm/Remove-Item/del)
+        // This setTimeout serves as a fallback in case the in-shell cleanup fails
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(tempFile)) {
+              fs.unlinkSync(tempFile);
+              debugLog(
+                "[ClaudeIntegration:invokeClaude] Deferred cleanup removed temp file:",
+                tempFile
+              );
+            }
+          } catch (cleanupError) {
+            debugError(
+              "[ClaudeIntegration:invokeClaude] Deferred cleanup failed for temp file:",
+              cleanupError
+            );
+          }
+        }, 5000); // Wait 5 seconds to ensure shell has time to source the file
         return;
       }
       // If command is null, fall through to default method
@@ -861,6 +880,17 @@ export async function invokeClaudeAsync(
         debugLog(
           "[ClaudeIntegration:invokeClaudeAsync] ========== INVOKE CLAUDE COMPLETE (temp file) =========="
         );
+        // Schedule deferred cleanup of temp file (non-blocking fallback)
+        // The shell command already includes in-shell cleanup (rm/Remove-Item/del)
+        // This setTimeout serves as a fallback in case the in-shell cleanup fails
+        setTimeout(() => {
+          fsPromises.unlink(tempFile).catch((cleanupError) => {
+            debugError(
+              "[ClaudeIntegration:invokeClaudeAsync] Deferred cleanup failed for temp file:",
+              cleanupError
+            );
+          });
+        }, 5000); // Wait 5 seconds to ensure shell has time to source the file
         return;
       }
       // If command is null, fall through to default method
