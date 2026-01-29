@@ -490,16 +490,31 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
-    # Get OAuth token - Claude CLI handles token lifecycle internally
-    oauth_token = require_auth_token()
+    # Authentication: Support both OAuth and API Profile modes
+    # API Profile mode: ANTHROPIC_BASE_URL indicates custom endpoint (e.g., z.ai)
+    # OAuth mode: CLAUDE_CODE_OAUTH_TOKEN for Claude Code subscription
+    api_profile_mode = bool(os.environ.get("ANTHROPIC_BASE_URL"))
 
-    # Validate token is not encrypted before passing to SDK
-    # Encrypted tokens (enc:...) should have been decrypted by require_auth_token()
-    # If we still have an encrypted token here, it means decryption failed or was skipped
-    validate_token_not_encrypted(oauth_token)
+    if api_profile_mode:
+        # API profile mode: ensure ANTHROPIC_AUTH_TOKEN is present
+        if not os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+            raise ValueError(
+                "API profile mode active (ANTHROPIC_BASE_URL is set) "
+                "but ANTHROPIC_AUTH_TOKEN is not set"
+            )
+        # Do NOT set CLAUDE_CODE_OAUTH_TOKEN - SDK will use ANTHROPIC_AUTH_TOKEN
+        logger.info("Using API profile authentication")
+    else:
+        # OAuth mode: require and validate OAuth token
+        oauth_token = require_auth_token()
 
-    # Ensure SDK can access it via its expected env var
-    os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+        # Validate token is not encrypted before passing to SDK
+        # Encrypted tokens (enc:...) should have been decrypted by require_auth_token()
+        # If we still have an encrypted token here, it means decryption failed or was skipped
+        validate_token_not_encrypted(oauth_token)
+
+        # Ensure SDK can access it via its expected env var
+        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
 
     # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
     sdk_env = get_sdk_env_vars()
